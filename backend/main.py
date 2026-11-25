@@ -15,7 +15,8 @@ from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitErr
 from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy import DateTime, ForeignKey, Integer, String, create_engine, inspect, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
-
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
@@ -382,11 +383,12 @@ async def ai_chat(
     request: ChatRequest,
     user: User = Depends(get_current_user),
 ):
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if not gemini_key and not openai_key:
         raise HTTPException(
             status_code=503,
-            detail="AI is not configured. Add OPENAI_API_KEY to the backend .env file.",
+            detail="AI is not configured. Add GEMINI_API_KEY or OPENAI_API_KEY to the backend .env file.",
         )
 
     with Session(engine) as db:
@@ -410,35 +412,59 @@ async def ai_chat(
             for order in orders
         ],
     }
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are BizBuddy's helpful atelier concierge. Answer clearly and warmly. "
-                "Use the workspace context when relevant. Do not invent inventory, prices, "
-                "payments, policies, or order details. Ask a concise follow-up question "
-                "when information is missing. Workspace context: "
-                f"{workspace_context}"
-            ),
-        },
-        *[message.model_dump() for message in request.messages],
-    ]
+    system_prompt = (
+        "You are BizBuddy's helpful atelier concierge. Answer clearly and warmly. "
+        "Use the workspace context when relevant. Do not invent inventory, prices, "
+        "payments, policies, or order details. Ask a concise follow-up question "
+        "when information is missing. Workspace context: "
+        f"{workspace_context}"
+    )
 
-    try:
-        async with AsyncOpenAI(api_key=api_key) as client:
-            completion = await client.chat.completions.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-                messages=messages,
-                max_completion_tokens=450,
+    if gemini_key:
+        try:
+            gclient = genai.Client(api_key=gemini_key)
+            contents = [
+                types.Content(
+                    role="user" if m.role == "user" else "model",
+                    parts=[types.Part(text=m.content)],
+                )
+                for m in request.messages
+            ]
+            response = await gclient.aio.models.generate_content(
+                model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    max_output_tokens=1000,
+                ),
             )
-    except RateLimitError as error:
-        raise HTTPException(status_code=429, detail="AI usage limit reached. Try again shortly.") from error
-    except APIConnectionError as error:
-        raise HTTPException(status_code=502, detail="Could not connect to the AI provider.") from error
-    except APIStatusError as error:
-        raise HTTPException(status_code=502, detail="The AI provider could not complete the request.") from error
+            reply = response.text
+        except Exception as error:
+            print("Gemini error:", error)
+            raise HTTPException(
+                status_code=502,
+                detail="The AI provider could not complete the request.",
+            ) from error
+    else:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            *[message.model_dump() for message in request.messages],
+        ]
+        try:
+            async with AsyncOpenAI(api_key=openai_key) as client:
+                completion = await client.chat.completions.create(
+                    model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                    messages=messages,
+                    max_completion_tokens=450,
+                )
+        except RateLimitError as error:
+            raise HTTPException(status_code=429, detail="AI usage limit reached. Try again shortly.") from error
+        except APIConnectionError as error:
+            raise HTTPException(status_code=502, detail="Could not connect to the AI provider.") from error
+        except APIStatusError as error:
+            raise HTTPException(status_code=502, detail="The AI provider could not complete the request.") from error
+        reply = completion.choices[0].message.content if completion.choices else None
 
-    reply = completion.choices[0].message.content if completion.choices else None
     if not reply:
         raise HTTPException(status_code=502, detail="The AI provider returned an empty reply.")
     return {"reply": reply}
