@@ -11,12 +11,15 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.env.*
 !.env.example
 **/venv/
 **/__pycache__/
 *.db
 
 # Editor directories and files
+.vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
@@ -25,4 +28,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-config.bat
+
+**/.venv/
+*.db-*
+backend/.encryption-key
+
+backend/.opencode-workspace/

@@ -41,7 +41,7 @@ class TwilioApiTests(unittest.TestCase):
         self.engine_patch.start()
         self.environment_patch = patch.dict(
             os.environ,
-            {"CHATBOT_ENCRYPTION_KEY": Fernet.generate_key().decode("ascii")},
+            {"CHATBOT_ENCRYPTION_KEY": Fernet.generate_key().decode("ascii"), "PUBLIC_API_URL": "http://testserver"},
         )
         self.environment_patch.start()
         main.Base.metadata.create_all(self.engine)
@@ -124,6 +124,10 @@ class TwilioApiTests(unittest.TestCase):
                 headers={"X-Twilio-Signature": signature},
             )
             self.assertEqual(response.status_code, 200, response.text)
+        inbox = self.client.get('/api/chatbot/dashboard', headers=self.headers).json()
+        self.assertEqual(len(inbox['conversations']), 1)
+        self.assertEqual(inbox['conversations'][0]['channel'], 'sms')
+        self.assertEqual(len(inbox['conversations'][0]['messages']), 1)
         with Session(self.engine) as db:
             count = db.scalar(select(func.count(main.TwilioMessage.id)))
             message = db.scalar(select(main.TwilioMessage))

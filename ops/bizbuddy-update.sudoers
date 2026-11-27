@@ -1,0 +1,1 @@
+vangaard ALL=(root) NOPASSWD: /usr/bin/systemctl restart bizbuddy-api.service, /usr/bin/systemctl restart bizbuddy-web.service

@@ -2,7 +2,7 @@ import json
 import os
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import main
 
@@ -53,7 +53,7 @@ class ChatbotPricingSafetyTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def get_reply(self, message, reply):
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key", "BIZBUDDY_AI_PROVIDER": "openai"}):
             with patch("main.AsyncOpenAI", return_value=FakeOpenAIClient(reply)):
                 return await main.generate_chatbot_reply(
                     self.chatbot,
@@ -106,6 +106,12 @@ class ChatbotPricingSafetyTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result["needs_human"])
         self.assertEqual(result["reply"], "The Blue scarf costs ₦5,000.")
+
+    async def test_opencode_cannot_bypass_price_guard(self):
+        with patch.dict(os.environ, {"BIZBUDDY_AI_PROVIDER": "opencode"}), patch('ai_provider.generate', AsyncMock(return_value={"reply": "The Blue scarf costs ₦9,000.", "needs_human": False, "order_request": False})):
+            result = await main.generate_chatbot_reply(self.chatbot, [{"role":"user", "content":"What is the price of the Blue scarf?"}])
+        self.assertTrue(result['needs_human'])
+        self.assertNotIn('9,000', result['reply'])
 
 
 if __name__ == "__main__":

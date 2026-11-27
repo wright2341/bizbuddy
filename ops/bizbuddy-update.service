@@ -1,0 +1,16 @@
+[Unit]
+Description=Validate and deploy BizBuddy GitHub main
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=vangaard
+Group=vangaard
+WorkingDirectory=/home/vangaard/bizbuddy
+Environment=HOME=/home/vangaard
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 /home/vangaard/bizbuddy/ops/update.py
+TimeoutStartSec=15min
+UMask=0077
+PrivateTmp=true
