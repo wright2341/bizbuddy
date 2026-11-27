@@ -1,0 +1,12 @@
+[Unit]
+Description=Check GitHub main for BizBuddy updates every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+RandomizedDelaySec=5
+AccuracySec=5
+Unit=bizbuddy-update.service
+
+[Install]
+WantedBy=timers.target

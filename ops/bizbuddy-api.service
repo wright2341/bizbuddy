@@ -1,0 +1,22 @@
+[Unit]
+Description=BizBuddy back-office API
+After=network.target
+
+[Service]
+Type=simple
+User=vangaard
+Group=vangaard
+WorkingDirectory=/var/lib/bizbuddy/current/backend
+Environment=DATABASE_URL=sqlite:////home/vangaard/bizbuddy/backend/bizbuddy.db
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/var/lib/bizbuddy/current/.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/vangaard/bizbuddy/backend
+
+[Install]
+WantedBy=multi-user.target
